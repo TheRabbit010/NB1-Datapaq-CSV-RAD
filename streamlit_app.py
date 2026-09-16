@@ -636,12 +636,17 @@ if uploaded_file:
         search_text = f"{uploaded_file.name} {metadata.get('title', '')} {metadata.get('note_1', '')} {metadata.get('raw_text', '')}".upper()
         is_16xhp = ("16XHP" in search_text) or ("16 XHP" in search_text)
         is_27xhp = ("27XHP" in search_text) or ("27 XHP" in search_text)
+        is_12xhp = ("12XHP" in search_text) or ("12 XHP" in search_text)
 
-        # หากเจอรุ่น 16XHP ให้ใช้อัตราอ้างอิงช่วงเวลาเพื่อ Dwell Time ให้ตรงตามไฟล์อ้างอิงของ 16XHP
+        # อ้างอิงช่วงเวลาสำหรับการคำนวณ Dwell Time แบบแยกอิสระเพื่อให้ตรงกับไฟล์
         if is_16xhp:
             dryer_max_sec = 270
             db_range_sec = (330, 840)
+        elif is_27xhp:
+            dryer_max_sec = 271
+            db_range_sec = (327, 841)
         else:
+            # 12XHP หรือรุ่นอื่นๆ (Default)
             dryer_max_sec = 271
             db_range_sec = (298, 841)
 
