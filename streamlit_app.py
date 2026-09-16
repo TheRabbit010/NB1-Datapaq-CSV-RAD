@@ -405,10 +405,6 @@ if uploaded_file:
 
         st.sidebar.markdown("---")
         st.sidebar.header("🎛️ Dynamic Controls")
-        
-        # ปรับแก้ช่วงเวลาของโซน Dryer และ Debinder ให้ตรงตามมาตรฐานคำนวณ Dwell Time
-        dryer_max_sec = 270
-        db_range_sec = (330, 840)
 
         color_shading_mode = st.sidebar.radio(
             "เลือกโหมดแสดงสี:",
@@ -636,14 +632,23 @@ if uploaded_file:
         # ---------------------------------------------------------
         st.markdown("### 📊 ตารางสรุปผลการวิเคราะห์ (Data Table for Google Sheets Copy)")
 
+        # ระบบตรวจหารุ่นสินค้าอัตโนมัติจากไฟล์ CSV
+        search_text = f"{uploaded_file.name} {metadata.get('title', '')} {metadata.get('note_1', '')} {metadata.get('raw_text', '')}".upper()
+        is_16xhp = ("16XHP" in search_text) or ("16 XHP" in search_text)
+        is_27xhp = ("27XHP" in search_text) or ("27 XHP" in search_text)
+
+        # หากเจอรุ่น 16XHP ให้ใช้อัตราอ้างอิงช่วงเวลาเพื่อ Dwell Time ให้ตรงตามไฟล์อ้างอิงของ 16XHP
+        if is_16xhp:
+            dryer_max_sec = 270
+            db_range_sec = (330, 840)
+        else:
+            dryer_max_sec = 271
+            db_range_sec = (298, 841)
+
         dryer_subset = df[(df["ElapsedSeconds"] >= 0) & (df["ElapsedSeconds"] <= dryer_max_sec)]
         debinder_subset = df[(df["ElapsedSeconds"] >= db_range_sec[0]) & (df["ElapsedSeconds"] <= db_range_sec[1])]
         brazing_ht_subset = df[(df["ElapsedSeconds"] >= 0)]
         brazing_max_subset = df[(df["ElapsedSeconds"] >= 900) & (df["ElapsedSeconds"] <= 1750)]
-
-        # ระบบตรวจหารุ่นสินค้าอัตโนมัติจากไฟล์ CSV
-        search_text = f"{uploaded_file.name} {metadata.get('title', '')} {metadata.get('note_1', '')} {metadata.get('raw_text', '')}".upper()
-        is_27xhp = ("27XHP" in search_text) or ("27 XHP" in search_text)
 
         # จัดลำดับโพรบ PB#1, PB#2, PB#3, PB#8, PB#4, PB#5, PB#6, PB#7
         probe_order = [1, 2, 3, 8, 4, 5, 6, 7]
