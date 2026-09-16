@@ -394,13 +394,6 @@ uploaded_file = st.sidebar.file_uploader(
     accept_multiple_files=False
 )
 
-# เลือก Model Standard
-selected_model = st.sidebar.selectbox(
-    "📌 เลือกรุ่นสินค้า (Process Standard Model):",
-    ["12/27XHP (Standard)", "16XHP"],
-    index=0
-)
-
 # 7. แสดงผล Header Metadata + กราฟพร้อมโซนเวลา
 if uploaded_file:
     df, metadata = parse_single_file(uploaded_file)
@@ -640,7 +633,7 @@ if uploaded_file:
         # ---------------------------------------------------------
         # 📊 ตารางสรุปค่า
         # ---------------------------------------------------------
-        st.markdown(f"### 📊 ตารางสรุปผลการวิเคราะห์ (Model: <span style='color: #F0B90B;'>{selected_model}</span>)", unsafe_allow_html=True)
+        st.markdown("### 📊 ตารางสรุปผลการวิเคราะห์ (Data Table for Google Sheets Copy)")
 
         dryer_subset = df[(df["ElapsedSeconds"] >= 0) & (df["ElapsedSeconds"] <= dryer_max_sec)]
         debinder_subset = df[(df["ElapsedSeconds"] >= db_range_sec[0]) & (df["ElapsedSeconds"] <= db_range_sec[1])]
