@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
 
-# 1. ตั้งค่า Page Config (แก้ไขชื่อเป็น RAD)
+# 1. ตั้งค่า Page Config
 st.set_page_config(
     page_title="Datapaq NB1 RAD",
     page_icon="🏭",
@@ -52,7 +52,7 @@ st.markdown("""
             color: #000000 !important;
         }
 
-        /* กล่อง File Uploader */
+        /* กล่อง File Uploader & Selectbox */
         [data-testid="stFileUploader"] {
             background-color: #161b22 !important;
             border: 1.5px solid #F0B90B !important;
@@ -185,7 +185,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. แสดงชื่อโปรแกรมหลัก (แก้ไขชื่อเป็น RAD)
+# 3. แสดงชื่อโปรแกรมหลัก
 st.title("🏭 Datapaq NB1 RAD")
 
 # 4. ฟังก์ชันแปลงวินาทีเป็นรูปแบบ h:mm:ss
@@ -392,6 +392,13 @@ uploaded_file = st.sidebar.file_uploader(
     "อัปโหลดไฟล์ CSV (.csv)", 
     type=["csv"],
     accept_multiple_files=False
+)
+
+# เลือก Model Standard
+selected_model = st.sidebar.selectbox(
+    "📌 เลือกรุ่นสินค้า (Process Standard Model):",
+    ["12/27XHP (Standard)", "16XHP"],
+    index=0
 )
 
 # 7. แสดงผล Header Metadata + กราฟพร้อมโซนเวลา
@@ -633,7 +640,7 @@ if uploaded_file:
         # ---------------------------------------------------------
         # 📊 ตารางสรุปค่า
         # ---------------------------------------------------------
-        st.markdown("### 📊 ตารางสรุปผลการวิเคราะห์ (Data Table for Google Sheets Copy)")
+        st.markdown(f"### 📊 ตารางสรุปผลการวิเคราะห์ (Model: <span style='color: #F0B90B;'>{selected_model}</span>)", unsafe_allow_html=True)
 
         dryer_subset = df[(df["ElapsedSeconds"] >= 0) & (df["ElapsedSeconds"] <= dryer_max_sec)]
         debinder_subset = df[(df["ElapsedSeconds"] >= db_range_sec[0]) & (df["ElapsedSeconds"] <= db_range_sec[1])]
@@ -676,28 +683,24 @@ if uploaded_file:
             d_val = dryer_subset[target_col_db_d].max() if (is_db_d_valid and not dryer_subset.empty) else np.nan
             d_max = f"{d_val:.1f}" if pd.notna(d_val) else "-"
             
-            # Dwell Times (แสดง "-" ถ้าสายหลุดหรือไม่มีข้อมูล)
+            # Dwell Times ตาม Process Standard PRCNVR02044 C
             if is_probe_valid and pd.notna(br_val):
-                br_dwell_sec = (brazing_ht_subset[col_name] >= 577.0).sum() if not brazing_ht_subset.empty else 0
+                br_dwell_sec = (brazing_ht_subset[col_name] >= 583.0).sum() if not brazing_ht_subset.empty else 0
                 br_dwell_str = format_seconds_to_time(br_dwell_sec)
             else:
                 br_dwell_str = "-"
                 
             if is_db_d_valid and pd.notna(db_val):
-                db_dwell_sec = (debinder_subset[target_col_db_d] >= 300.0).sum() if not debinder_subset.empty else 0
+                db_dwell_sec = (debinder_subset[target_col_db_d] >= 200.0).sum() if not debinder_subset.empty else 0
                 db_dwell_str = format_seconds_to_time(db_dwell_sec)
             else:
                 db_dwell_str = "-"
                 
             if is_db_d_valid and pd.notna(d_val):
-                d_dwell_sec = (dryer_subset[target_col_db_d] >= 200.0).sum() if not dryer_subset.empty else 0
+                d_dwell_sec = (dryer_subset[target_col_db_d] >= 175.0).sum() if not dryer_subset.empty else 0
                 d_dwell_str = format_seconds_to_time(d_dwell_sec)
-
-                d_dwell_150_sec = (dryer_subset[target_col_db_d] >= 150.0).sum() if not dryer_subset.empty else 0
-                d_dwell_150_str = format_seconds_to_time(d_dwell_150_sec)
             else:
                 d_dwell_str = "-"
-                d_dwell_150_str = "-"
 
             summary_rows.append([
                 short_pb_name,
@@ -707,8 +710,7 @@ if uploaded_file:
                 d_max,
                 br_dwell_str,
                 db_dwell_str,
-                d_dwell_str,
-                d_dwell_150_str
+                d_dwell_str
             ])
 
         multi_cols = pd.MultiIndex.from_tuples([
@@ -717,26 +719,31 @@ if uploaded_file:
             ("Brazing zone", "Max temp / probe (°C)"),
             ("Debinder", "Max temp / probe (°C)"),
             ("Dryer", "Max temp / probe (°C)"),
-            ("Brazing zone", "at 577°C / probe"),
-            ("Debinder", "at 300°C / probe"),
-            ("Dryer", "at 200°C / probe"),
-            ("Dryer", "at 150°C / probe")
+            ("Brazing zone", "at 583°C / 577°C"),
+            ("Debinder", "at 200°C / probe"),
+            ("Dryer", "at 175°C / probe")
         ])
 
         display_summary_df = pd.DataFrame(summary_rows, columns=multi_cols)
 
         st.dataframe(display_summary_df, use_container_width=True, hide_index=True)
 
+        # 📌 แสดงเกณฑ์มาตรฐานอ้างอิง PRCNVR02044 C
         st.markdown("""
-            <div style="background-color: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px 18px; font-size: 13px; color: #CCCCCC; margin-top: 10px; line-height: 1.6;">
-                <b style="color: #F0B90B;">📌 เกณฑ์มาตรฐานอ้างอิง (Process Standards):</b><br>
-                • <b>Maximum Temperatures (°C):</b> Brazing Zone: <b>585 - 607 °C</b> | Debinder Zone: <b>300 - 375 °C</b> | Dryer Zone: <b>200 - 350 °C</b><br>
-                • <b>Brazing Dwell Time (at 577°C / probe):</b><br>
-                &nbsp;&nbsp;&nbsp;&nbsp;• <b>4.00 - 6.30 min</b> (except end cap RD > 2.00 min)<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;• <b>4.00 - 7.45 min</b> for middle center & 1st tube after side plate.<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;• <b>2.00 - 7.45 min</b> for end cap RD , middle of the connector block & coldest block.<br>
-                • <b>Debinder Dwell Time:</b> at 300°C / probe: <b>> 2:30 min (>150s)</b><br>
-                • <b>Dryer Dwell Time:</b> at 200°C / probe: <b>> 1:30 min (>90s)</b> | at 150°C / probe: <b>&ge; 1:30 min (&ge;90s)</b>
+            <div style="background-color: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 14px 18px; font-size: 13px; color: #CCCCCC; margin-top: 10px; line-height: 1.6;">
+                <b style="color: #F0B90B; font-size: 14px;">📌 เกณฑ์มาตรฐานอ้างอิง (PRCNVR02044 C Brazed Radiators Brazing Cycle Parameter):</b><br><br>
+                <b style="color: #58a6ff;">🔹 รุ่น 12/27XHP (ใช้เกณฑ์ร่วมกัน):</b><br>
+                • <b>Maximum Temperatures (°C):</b> Brazing Zone (For all probes): <b>583 - 607 °C</b> | Debinder: <b>200 - 375 °C</b> | Dryer: <b>175 - 260 °C</b><br>
+                • <b>Dwell Time:</b><br>
+                &nbsp;&nbsp;&nbsp;&nbsp;• Brazing zone: <b>at 600°C: < 4.00 min</b> | <b>at 583°C / 577°C: 2:30 - 7:00 min</b><br>
+                &nbsp;&nbsp;&nbsp;&nbsp;• Debinder: <b>at 200°C / probe: > 2:00 min (>120s)</b><br>
+                &nbsp;&nbsp;&nbsp;&nbsp;• Dryer: <b>at 175°C / probe: > 1:00 min (>60s)</b><br><br>
+                <b style="color: #58a6ff;">🔹 รุ่น 16XHP:</b><br>
+                • <b>Maximum Temperatures (°C):</b> Brazing Zone: Corner's probes: <b>596 - 610 °C</b> | Center probe: <b>583 - 607 °C</b> | Debinder: <b>200 - 375 °C</b> | Dryer: <b>175 - 260 °C</b><br>
+                • <b>Dwell Time:</b><br>
+                &nbsp;&nbsp;&nbsp;&nbsp;• Brazing zone: <b>at 600°C: < 4.00 min</b> | <b>at 583°C / 577°C: 2:30 - 6:00 min</b><br>
+                &nbsp;&nbsp;&nbsp;&nbsp;• Debinder: <b>at 200°C / probe: > 2:00 min (>120s)</b><br>
+                &nbsp;&nbsp;&nbsp;&nbsp;• Dryer: <b>at 175°C / probe: > 1:00 min (>60s)</b>
             </div>
         """, unsafe_allow_html=True)
 
