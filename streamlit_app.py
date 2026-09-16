@@ -6,9 +6,9 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
 
-# 1. ตั้งค่า Page Config
+# 1. ตั้งค่า Page Config (แก้ไขชื่อเป็น RAD)
 st.set_page_config(
-    page_title="Datapaq NB1 CDS",
+    page_title="Datapaq NB1 RAD",
     page_icon="🏭",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -185,8 +185,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. แสดงชื่อโปรแกรมหลัก
-st.title("🏭 Datapaq NB1 CDS")
+# 3. แสดงชื่อโปรแกรมหลัก (แก้ไขชื่อเป็น RAD)
+st.title("🏭 Datapaq NB1 RAD")
 
 # 4. ฟังก์ชันแปลงวินาทีเป็นรูปแบบ h:mm:ss
 def format_seconds_to_time(total_seconds):
@@ -750,7 +750,7 @@ if uploaded_file:
             with col_opt1:
                 custom_filename = st.text_input(
                     "ตั้งชื่อไฟล์ดาวน์โหลด:", 
-                    value="datapaq_nb1_cds_8probes_data.xlsx"
+                    value="datapaq_nb1_rad_8probes_data.xlsx"
                 )
                 if not custom_filename.endswith('.xlsx'):
                     custom_filename += '.xlsx'
