@@ -52,7 +52,7 @@ st.markdown("""
             color: #000000 !important;
         }
 
-        /* กล่อง File Uploader & Selectbox */
+        /* กล่อง File Uploader */
         [data-testid="stFileUploader"] {
             background-color: #161b22 !important;
             border: 1.5px solid #F0B90B !important;
@@ -208,7 +208,7 @@ def hex_to_rgba(hex_str, opacity=0.25):
     b = int(hex_str[4:6], 16)
     return f"rgba({r}, {g}, {b}, {opacity})"
 
-# ฟังก์ชันแปลงค่าตัวเลขอย่างปลอดภัย (รองรับ *OC*, NC, - หรือค่าที่ไม่ใช่ตัวเลขให้เป็น np.nan)
+# ฟังก์ชันแปลงค่าตัวเลขอย่างปลอดภัย
 def safe_float(val):
     if pd.isna(val):
         return np.nan
@@ -640,7 +640,12 @@ if uploaded_file:
         brazing_ht_subset = df[(df["ElapsedSeconds"] >= 0)]
         brazing_max_subset = df[(df["ElapsedSeconds"] >= 900) & (df["ElapsedSeconds"] <= 1750)]
 
-        probe_order = [1, 2, 3, 4, 5, 6, 7, 8]
+        # ระบบตรวจหารุ่นสินค้าอัตโนมัติจากไฟล์ CSV
+        search_text = f"{uploaded_file.name} {metadata.get('title', '')} {metadata.get('note_1', '')} {metadata.get('raw_text', '')}".upper()
+        is_27xhp = ("27XHP" in search_text) or ("27 XHP" in search_text)
+
+        # จัดลำดับโพรบ PB#1, PB#2, PB#3, PB#8, PB#4, PB#5, PB#6, PB#7
+        probe_order = [1, 2, 3, 8, 4, 5, 6, 7]
         ordered_cols = []
         for p_num in probe_order:
             for c in probe_cols[:8]:
@@ -650,50 +655,49 @@ if uploaded_file:
 
         summary_rows = []
         for p_num, col_name in ordered_cols:
-            location = "Bottom" if p_num in [1, 2, 3, 4] else "Top"
+            if is_27xhp:
+                location = "Right" if p_num in [1, 2, 3, 8] else "Left"
+            else:
+                location = "Bottom" if p_num in [1, 2, 3, 8] else "Top"
+
             short_pb_name = f"PB#{p_num}"
-            
-            # สลับเฉพาะ Probe 3 และ Probe 4 ในส่วน Debinder และ Dryer ให้ตรงตามไฟล์อ้างอิง
-            target_col_db_d = col_name
-            if p_num == 3:
-                target_col_db_d = next((c for p, c in ordered_cols if p == 4), col_name)
-            elif p_num == 4:
-                target_col_db_d = next((c for p, c in ordered_cols if p == 3), col_name)
-            
             probe_series = df[col_name]
-            db_d_series = df[target_col_db_d]
-            
             is_probe_valid = probe_series.notna().any()
-            is_db_d_valid = db_d_series.notna().any()
             
-            # Max Temp (แสดง "-" ถ้าสายหลุดหรือไม่มีข้อมูล)
+            # Max Temp
             br_val = brazing_max_subset[col_name].max() if (is_probe_valid and not brazing_max_subset.empty) else np.nan
             br_max = f"{br_val:.1f}" if pd.notna(br_val) else "-"
             
-            db_val = debinder_subset[target_col_db_d].max() if (is_db_d_valid and not debinder_subset.empty) else np.nan
+            db_val = debinder_subset[col_name].max() if (is_probe_valid and not debinder_subset.empty) else np.nan
             db_max = f"{db_val:.1f}" if pd.notna(db_val) else "-"
             
-            d_val = dryer_subset[target_col_db_d].max() if (is_db_d_valid and not dryer_subset.empty) else np.nan
+            d_val = dryer_subset[col_name].max() if (is_probe_valid and not dryer_subset.empty) else np.nan
             d_max = f"{d_val:.1f}" if pd.notna(d_val) else "-"
             
-            # Dwell Times ตาม Process Standard PRCNVR02044 C
+            # Dwell Times
             if is_probe_valid and pd.notna(br_val):
-                br_dwell_sec = (brazing_ht_subset[col_name] >= 583.0).sum() if not brazing_ht_subset.empty else 0
-                br_dwell_str = format_seconds_to_time(br_dwell_sec)
-            else:
-                br_dwell_str = "-"
+                br_600_sec = (brazing_ht_subset[col_name] >= 600.0).sum() if not brazing_ht_subset.empty else 0
+                br_600_str = format_seconds_to_time(br_600_sec)
                 
-            if is_db_d_valid and pd.notna(db_val):
-                db_dwell_sec = (debinder_subset[target_col_db_d] >= 200.0).sum() if not debinder_subset.empty else 0
-                db_dwell_str = format_seconds_to_time(db_dwell_sec)
-            else:
-                db_dwell_str = "-"
+                br_583_sec = (brazing_ht_subset[col_name] >= 583.0).sum() if not brazing_ht_subset.empty else 0
+                br_583_str = format_seconds_to_time(br_583_sec)
                 
-            if is_db_d_valid and pd.notna(d_val):
-                d_dwell_sec = (dryer_subset[target_col_db_d] >= 175.0).sum() if not dryer_subset.empty else 0
-                d_dwell_str = format_seconds_to_time(d_dwell_sec)
+                br_577_sec = (brazing_ht_subset[col_name] >= 577.0).sum() if not brazing_ht_subset.empty else 0
+                br_577_str = format_seconds_to_time(br_577_sec)
             else:
-                d_dwell_str = "-"
+                br_600_str, br_583_str, br_577_str = "-", "-", "-"
+                
+            if is_probe_valid and pd.notna(db_val):
+                db_200_sec = (debinder_subset[col_name] >= 200.0).sum() if not debinder_subset.empty else 0
+                db_200_str = format_seconds_to_time(db_200_sec)
+            else:
+                db_200_str = "-"
+                
+            if is_probe_valid and pd.notna(d_val):
+                d_175_sec = (dryer_subset[col_name] >= 175.0).sum() if not dryer_subset.empty else 0
+                d_175_str = format_seconds_to_time(d_175_sec)
+            else:
+                d_175_str = "-"
 
             summary_rows.append([
                 short_pb_name,
@@ -701,9 +705,11 @@ if uploaded_file:
                 br_max,
                 db_max,
                 d_max,
-                br_dwell_str,
-                db_dwell_str,
-                d_dwell_str
+                br_600_str,
+                br_583_str,
+                br_577_str,
+                db_200_str,
+                d_175_str
             ])
 
         multi_cols = pd.MultiIndex.from_tuples([
@@ -712,7 +718,9 @@ if uploaded_file:
             ("Brazing zone", "Max temp / probe (°C)"),
             ("Debinder", "Max temp / probe (°C)"),
             ("Dryer", "Max temp / probe (°C)"),
-            ("Brazing zone", "at 583°C / 577°C"),
+            ("Brazing zone", "at 600°C / probe"),
+            ("Brazing zone", "at 583°C / probe"),
+            ("Brazing zone", "at 577°C / probe"),
             ("Debinder", "at 200°C / probe"),
             ("Dryer", "at 175°C / probe")
         ])
