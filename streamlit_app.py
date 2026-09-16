@@ -200,16 +200,6 @@ def format_seconds_to_time(total_seconds):
     
     return f"{hours}:{minutes:02d}:{seconds:02d}"
 
-# ฟังก์ชันแปลง HH:MM:SS เป็นวินาที
-def time_str_to_seconds(time_str):
-    try:
-        parts = time_str.split(":")
-        if len(parts) == 3:
-            return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
-    except Exception:
-        pass
-    return 0
-
 # ฟังก์ชันแปลง Hex Color เป็น RGBA
 def hex_to_rgba(hex_str, opacity=0.25):
     hex_str = hex_str.lstrip('#')
@@ -422,42 +412,6 @@ if uploaded_file:
             index=0
         )
 
-        # ตรวจหารุ่นสินค้าจาก CSV
-        search_text = f"{uploaded_file.name} {metadata.get('title', '')} {metadata.get('note_1', '')} {metadata.get('raw_text', '')}".upper()
-        is_16xhp = ("16XHP" in search_text) or ("16 XHP" in search_text)
-        is_27xhp = ("27XHP" in search_text) or ("27 XHP" in search_text)
-        is_12xhp = ("12XHP" in search_text) or ("12 XHP" in search_text)
-
-        # ตั้งค่าขอบเขตเวลาอ้างอิงของแต่ละรุ่น
-        if is_16xhp:
-            def_dryer_max = 270
-            def_db_range = (330, 840)
-        elif is_27xhp:
-            def_dryer_max = 271
-            def_db_range = (327, 841)
-        else:
-            def_dryer_max = 271
-            def_db_range = (298, 841)
-
-        # ---------------------------------------------------------
-        # 🔍 ซูมเลือกช่วงเวลา (Current Zoom Window Slider & Controls)
-        # ---------------------------------------------------------
-        st.sidebar.markdown("---")
-        st.sidebar.header("🔍 ซูมเลือกช่วงเวลา (Zoom Control)")
-
-        max_sec_limit = int(df["ElapsedSeconds"].max()) if not df.empty else 2280
-        
-        zoom_range = st.sidebar.slider(
-            "ปรับช่วงเวลาแสดงผล/คำนวณ (วินาที):",
-            min_value=0,
-            max_value=max_sec_limit,
-            value=(0, max_sec_limit),
-            step=1,
-            format="%d วินาที"
-        )
-
-        use_custom_zoom = (zoom_range[0] > 0) or (zoom_range[1] < max_sec_limit)
-
         if color_shading_mode == "แสดงสีตามโซน (By Zone)":
             zones_data = [
                 {"Start Time": "00:00:00", "End Time": "00:02:14", "Zone Name": "Dryer Z#1", "Color": "#F7DC6F"},
@@ -495,7 +449,8 @@ if uploaded_file:
             ]
             angle_setting = 0
 
-        df_chart = df[(df["ElapsedSeconds"] >= zoom_range[0]) & (df["ElapsedSeconds"] <= zoom_range[1])].copy()
+        max_view_sec = 2280
+        df_chart = df[df["ElapsedSeconds"] <= max_view_sec].copy()
         if df_chart.empty:
             df_chart = df.copy()
 
@@ -663,29 +618,7 @@ if uploaded_file:
             margin=dict(l=60, r=240, t=50, b=120)
         )
 
-        chart_event = st.plotly_chart(
-            fig, 
-            use_container_width=True,
-            on_select="rerun",
-            key="main_plotly_chart"
-        )
-
-        # ตรวจสอบการเลือกช่วงซูมบนรูปกราฟโดยตรง (Interactive Box Select / Zoom)
-        plotly_zoom_active = False
-        chart_zoom_start_sec, chart_zoom_end_sec = zoom_range[0], zoom_range[1]
-
-        if chart_event and isinstance(chart_event, dict) and "selection" in chart_event:
-            sel = chart_event["selection"]
-            if sel and "x" in sel and len(sel["x"]) == 2:
-                try:
-                    s_str, e_str = sel["x"][0], sel["x"][1]
-                    s_sec = time_str_to_seconds(s_str) if isinstance(s_str, str) else int(s_str)
-                    e_sec = time_str_to_seconds(e_str) if isinstance(e_str, str) else int(e_str)
-                    if e_sec > s_sec:
-                        chart_zoom_start_sec, chart_zoom_end_sec = s_sec, e_sec
-                        plotly_zoom_active = True
-                except Exception:
-                    pass
+        st.plotly_chart(fig, use_container_width=True)
 
         # 📌 แสดงกล่องข้อความ #note #1 ไว้ใต้รูปภาพกราฟ
         st.markdown(f"""
@@ -695,34 +628,32 @@ if uploaded_file:
         """, unsafe_allow_html=True)
 
         # ---------------------------------------------------------
-        # 📊 ตารางสรุปค่า (Recalculate Table by Current Zoom)
+        # 📊 ตารางสรุปค่า
         # ---------------------------------------------------------
-        is_zoomed = use_custom_zoom or plotly_zoom_active
+        st.markdown("### 📊 ตารางสรุปผลการวิเคราะห์ (Data Table for Google Sheets Copy)")
 
-        if is_zoomed:
-            t_start_lbl = format_seconds_to_time(chart_zoom_start_sec)
-            t_end_lbl = format_seconds_to_time(chart_zoom_end_sec)
-            st.markdown(f"""
-                <div style="background-color: #1c2128; border: 1.5px solid #F0B90B; border-radius: 6px; padding: 10px 16px; margin-bottom: 15px;">
-                    <b style="color: #F0B90B; font-size: 15px;">🔍 คำนวณตารางสรุปผลตามช่วงซูมปัจจุบัน (Current Zoom Window):</b> 
-                    <span style="color: #58a6ff; font-weight: bold; font-size: 15px;">{t_start_lbl} - {t_end_lbl}</span> 
-                    <span style="color: #8b949e; font-size: 13px;">({chart_zoom_start_sec}s - {chart_zoom_end_sec}s)</span>
-                </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown("### 📊 ตารางสรุปผลการวิเคราะห์ (Data Table for Google Sheets Copy)")
+        # ระบบตรวจหารุ่นสินค้าอัตโนมัติจากไฟล์ CSV
+        search_text = f"{uploaded_file.name} {metadata.get('title', '')} {metadata.get('note_1', '')} {metadata.get('raw_text', '')}".upper()
+        is_16xhp = ("16XHP" in search_text) or ("16 XHP" in search_text)
+        is_27xhp = ("27XHP" in search_text) or ("27 XHP" in search_text)
+        is_12xhp = ("12XHP" in search_text) or ("12 XHP" in search_text)
 
-        # กำหนดซับเซ็ตสำหรับการคำนวณตามช่วง Zoom ปัจจุบัน หรือใช้ Stage Standard เริ่มต้น
-        if is_zoomed:
-            dryer_subset = df[(df["ElapsedSeconds"] >= chart_zoom_start_sec) & (df["ElapsedSeconds"] <= chart_zoom_end_sec)]
-            debinder_subset = df[(df["ElapsedSeconds"] >= chart_zoom_start_sec) & (df["ElapsedSeconds"] <= chart_zoom_end_sec)]
-            brazing_ht_subset = df[(df["ElapsedSeconds"] >= chart_zoom_start_sec) & (df["ElapsedSeconds"] <= chart_zoom_end_sec)]
-            brazing_max_subset = df[(df["ElapsedSeconds"] >= chart_zoom_start_sec) & (df["ElapsedSeconds"] <= chart_zoom_end_sec)]
+        # อ้างอิงช่วงเวลาสำหรับการคำนวณ Dwell Time แบบแยกอิสระเพื่อให้ตรงกับไฟล์
+        if is_16xhp:
+            dryer_max_sec = 270
+            db_range_sec = (330, 840)
+        elif is_27xhp:
+            dryer_max_sec = 271
+            db_range_sec = (327, 841)
         else:
-            dryer_subset = df[(df["ElapsedSeconds"] >= 0) & (df["ElapsedSeconds"] <= def_dryer_max)]
-            debinder_subset = df[(df["ElapsedSeconds"] >= def_db_range[0]) & (df["ElapsedSeconds"] <= def_db_range[1])]
-            brazing_ht_subset = df[(df["ElapsedSeconds"] >= 0)]
-            brazing_max_subset = df[(df["ElapsedSeconds"] >= 900) & (df["ElapsedSeconds"] <= 1750)]
+            # 12XHP หรือรุ่นอื่นๆ (Default)
+            dryer_max_sec = 271
+            db_range_sec = (298, 841)
+
+        dryer_subset = df[(df["ElapsedSeconds"] >= 0) & (df["ElapsedSeconds"] <= dryer_max_sec)]
+        debinder_subset = df[(df["ElapsedSeconds"] >= db_range_sec[0]) & (df["ElapsedSeconds"] <= db_range_sec[1])]
+        brazing_ht_subset = df[(df["ElapsedSeconds"] >= 0)]
+        brazing_max_subset = df[(df["ElapsedSeconds"] >= 900) & (df["ElapsedSeconds"] <= 1750)]
 
         # จัดลำดับโพรบ PB#1, PB#2, PB#3, PB#8, PB#4, PB#5, PB#6, PB#7
         probe_order = [1, 2, 3, 8, 4, 5, 6, 7]
@@ -754,7 +685,7 @@ if uploaded_file:
             d_val = dryer_subset[col_name].max() if (is_probe_valid and not dryer_subset.empty) else np.nan
             d_max = f"{d_val:.1f}" if pd.notna(d_val) else "-"
             
-            # Dwell Times (คำนวณจากช่วงซูมปัจจุบัน หรือตามช่วง Process Stage Standard)
+            # Dwell Times
             if is_probe_valid and pd.notna(br_val):
                 br_600_sec = (brazing_ht_subset[col_name] >= 600.0).sum() if not brazing_ht_subset.empty else 0
                 br_600_str = format_seconds_to_time(br_600_sec)
