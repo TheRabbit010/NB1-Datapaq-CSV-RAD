@@ -406,8 +406,9 @@ if uploaded_file:
         st.sidebar.markdown("---")
         st.sidebar.header("🎛️ Dynamic Controls")
         
-        dryer_max_sec = 271
-        db_range_sec = (298, 841)
+        # ปรับแก้ช่วงเวลาของโซน Dryer และ Debinder ให้ตรงตามมาตรฐานคำนวณ Dwell Time
+        dryer_max_sec = 270
+        db_range_sec = (330, 840)
 
         color_shading_mode = st.sidebar.radio(
             "เลือกโหมดแสดงสี:",
