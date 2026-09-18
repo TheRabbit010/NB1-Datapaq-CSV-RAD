@@ -246,6 +246,7 @@ def parse_single_file(uploaded_file):
         "paqfile start date": "-",
         "paqfile start time": "-",
         "title": "-",
+        "logger": "-",
         "operator": "-",
         "product": "RADIATOR",
         "site": "VSTS / Power Chonburi",
@@ -270,6 +271,8 @@ def parse_single_file(uploaded_file):
                     metadata["paqfile start date"] = val
                 elif key.lower() == "paqfile start time":
                     metadata["paqfile start time"] = val
+                elif "logger" in key.lower():
+                    metadata["logger"] = val
                 elif key.lower() == "operator":
                     metadata["operator"] = val
                 elif key.lower() == "product":
@@ -423,13 +426,13 @@ if uploaded_file:
                 {"Start Time": "00:09:33", "End Time": "00:11:23", "Zone Name": "DB Z#3", "Color": "#D90429"},
                 {"Start Time": "00:11:24", "End Time": "00:13:38", "Zone Name": "DB Z#4", "Color": "#C1121F"},
                 {"Start Time": "00:13:39", "End Time": "00:15:34", "Zone Name": "XFER#1", "Color": "#9B59B6"},
-                {"Start Time": "00:15:35", "End Time": "00:17:48", "Zone Name": "Z#1", "Color": "#FF0033"},        
-                {"Start Time": "00:17:49", "End Time": "00:19:43", "Zone Name": "Z#2", "Color": "#E6002E"},        
-                {"Start Time": "00:19:44", "End Time": "00:21:40", "Zone Name": "Z#3", "Color": "#CC0029"},        
-                {"Start Time": "00:21:41", "End Time": "00:23:07", "Zone Name": "Z#4", "Color": "#B30024"},        
-                {"Start Time": "00:23:08", "End Time": "00:24:33", "Zone Name": "Z#5", "Color": "#CC0029"},        
-                {"Start Time": "00:24:34", "End Time": "00:25:59", "Zone Name": "Z#6", "Color": "#E6002E"},        
-                {"Start Time": "00:26:00", "End Time": "00:27:37", "Zone Name": "Z#7", "Color": "#FF0033"},        
+                {"Start Time": "00:15:35", "End Time": "00:17:48", "Zone Name": "Z#1", "Color": "#FF0033"},       
+                {"Start Time": "00:17:49", "End Time": "00:19:43", "Zone Name": "Z#2", "Color": "#E6002E"},       
+                {"Start Time": "00:19:44", "End Time": "00:21:40", "Zone Name": "Z#3", "Color": "#CC0029"},       
+                {"Start Time": "00:21:41", "End Time": "00:23:07", "Zone Name": "Z#4", "Color": "#B30024"},       
+                {"Start Time": "00:23:08", "End Time": "00:24:33", "Zone Name": "Z#5", "Color": "#CC0029"},       
+                {"Start Time": "00:24:34", "End Time": "00:25:59", "Zone Name": "Z#6", "Color": "#E6002E"},       
+                {"Start Time": "00:26:00", "End Time": "00:27:37", "Zone Name": "Z#7", "Color": "#FF0033"},       
                 {"Start Time": "00:27:38", "End Time": "00:29:19", "Zone Name": "WatCool#1", "Color": "#00B4D8"},
                 {"Start Time": "00:29:20", "End Time": "00:30:41", "Zone Name": "WatCool#2", "Color": "#0096C7"},
                 {"Start Time": "00:30:42", "End Time": "00:32:02", "Zone Name": "Exit curtain box", "Color": "#0077B6"},
@@ -441,10 +444,10 @@ if uploaded_file:
             angle_setting = -90
         else:
             zones_data = [
-                {"Start Time": "00:00:00", "End Time": "00:04:58", "Zone Name": "Dryer", "Color": "#F39C12"},       
-                {"Start Time": "00:04:59", "End Time": "00:15:34", "Zone Name": "Debinder", "Color": "#E74C3C"},    
-                {"Start Time": "00:15:35", "End Time": "00:27:37", "Zone Name": "Brazing", "Color": "#FF0033"},     
-                {"Start Time": "00:27:38", "End Time": "00:34:15", "Zone Name": "Cool", "Color": "#00B4D8"},        
+                {"Start Time": "00:00:00", "End Time": "00:04:58", "Zone Name": "Dryer", "Color": "#F39C12"},      
+                {"Start Time": "00:04:59", "End Time": "00:15:34", "Zone Name": "Debinder", "Color": "#E74C3C"},   
+                {"Start Time": "00:15:35", "End Time": "00:27:37", "Zone Name": "Brazing", "Color": "#FF0033"},    
+                {"Start Time": "00:27:38", "End Time": "00:34:15", "Zone Name": "Cool", "Color": "#00B4D8"},       
                 {"Start Time": "00:34:16", "End Time": "00:38:00", "Zone Name": "Exit", "Color": "#90E0EF"}        
             ]
             angle_setting = 0
@@ -454,7 +457,7 @@ if uploaded_file:
         if df_chart.empty:
             df_chart = df.copy()
 
-        # 📋 แสดงผล Header Metadata
+        # 📋 แสดงผล Header Metadata (ย้าย #logger s/n ไปแสดงด้านขวา เหนือ #operator)
         col_h1, col_h2 = st.columns(2)
         with col_h1:
             st.markdown(f"""
@@ -467,6 +470,7 @@ if uploaded_file:
         with col_h2:
             st.markdown(f"""
                 <div class="raw-header-box">
+                    <div><span class="raw-header-key">#logger s/n</span> = <span class="raw-header-val">{metadata.get('logger', '-')}</span></div>
                     <div><span class="raw-header-key">#operator</span> = <span class="raw-header-val">{metadata.get('operator', '-')}</span></div>
                     <div><span class="raw-header-key">#product</span> = <span class="raw-header-val">{metadata.get('product', 'RADIATOR')}</span></div>
                     <div><span class="raw-header-key">#site</span> = <span class="raw-header-val">{metadata.get('site', 'VSTS / Power Chonburi')}</span></div>
