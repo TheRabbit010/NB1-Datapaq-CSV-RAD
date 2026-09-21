@@ -227,7 +227,7 @@ def safe_float(val):
         return np.nan
 
 
-# 5. ฟังก์ชันอ่านไฟล์ PAQ / CSV และดึงข้อมูล
+# 5. ฟังก์ชันอ่านไฟล์ CSV และดึงข้อมูล
 def parse_single_file(uploaded_file):
     uploaded_file.seek(0)
     raw_bytes = uploaded_file.read()
@@ -414,11 +414,8 @@ if st.sidebar.button("🧹 เคลียร์ข้อมูลไฟล์�
     st.cache_data.clear()
     st.rerun()
 
-# รองรับไฟล์ทั้ง .paq, .csv และ .txt
 uploaded_file = st.sidebar.file_uploader(
-    "อัปโหลดไฟล์ Datapaq (.paq / .csv / .txt)",
-    type=["paq", "csv", "txt"],
-    accept_multiple_files=False,
+    "อัปโหลดไฟล์ CSV (.csv)", type=["csv"], accept_multiple_files=False
 )
 
 # 7. แสดงผล Header Metadata + กราฟพร้อมโซนเวลา
@@ -428,7 +425,7 @@ if uploaded_file:
     if df.empty:
         st.error(
             "⚠️ ไม่สามารถอ่านข้อมูลจากไฟล์ที่อัปโหลดได้"
-            " กรุณาตรวจสอบว่าเป็นไฟล์ข้อมูลจาก Datapaq (.paq / .csv) หรือไม่"
+            " กรุณาตรวจสอบว่าเป็นไฟล์ CSV จาก Datapaq หรือไม่"
         )
     else:
         st.sidebar.success(f"โหลดไฟล์ {uploaded_file.name} สำเร็จ ({len(df)} แถว)")
@@ -840,7 +837,7 @@ if uploaded_file:
             "### 📊 ตารางสรุปผลการวิเคราะห์ (Data Table for Google Sheets Copy)"
         )
 
-        # ระบบตรวจหารุ่นสินค้าอัตโนมัติจากไฟล์
+        # ระบบตรวจหารุ่นสินค้าอัตโนมัติจากไฟล์ CSV
         search_text = (
             f"{uploaded_file.name} {metadata.get('title', '')}"
             f" {metadata.get('note_1', '')}"
@@ -1042,4 +1039,4 @@ if uploaded_file:
                 )
 
 else:
-    st.info("👈 กรุณาเลือกอัปโหลดไฟล์ Datapaq (.paq / .csv) ที่เมนูด้านซ้าย")
+    st.info("👈 กรุณาเลือกอัปโหลดไฟล์ (.csv) ที่เมนูด้านซ้าย")
