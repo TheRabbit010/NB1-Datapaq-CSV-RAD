@@ -41,20 +41,6 @@ st.markdown(
             color: #ffffff !important;
         }
 
-        /* ปุ่มเคลียร์ข้อมูลใน Sidebar */
-        [data-testid="stSidebar"] div.stButton > button {
-            background-color: #21262d !important;
-            color: #ffffff !important;
-            border: 1px solid #F0B90B !important;
-            font-weight: bold !important;
-            width: 100% !important;
-            padding: 8px 16px !important;
-        }
-        [data-testid="stSidebar"] div.stButton > button:hover {
-            background-color: #F0B90B !important;
-            color: #000000 !important;
-        }
-
         /* กล่อง File Uploader */
         [data-testid="stFileUploader"] {
             background-color: #161b22 !important;
@@ -322,7 +308,7 @@ def clean_dataframe_for_excel(df_to_clean):
     return df_clean
 
 
-# 5. ฟังก์ชันอ่านไฟล์ PAQ / CSV และดึงข้อมูลแบบยืดหยุ่นรองรับจำนวนโพรบไดนามิก
+# 5. ฟังก์ชันอ่านไฟล์ CSV และดึงข้อมูลแบบยืดหยุ่นรองรับจำนวนโพรบไดนามิก
 def parse_single_file(uploaded_file):
     uploaded_file.seek(0)
     raw_bytes = uploaded_file.read()
@@ -522,14 +508,10 @@ def to_excel_bytes(dataframe, summary_dataframe=None, fig_plotly=None):
 # 6. เมนู Sidebar
 st.sidebar.header("📁 เมนูอัปโหลดข้อมูล")
 
-if st.sidebar.button("🧹 เคลียร์ข้อมูลไฟล์เก่าทั้งหมด"):
-    st.cache_data.clear()
-    st.rerun()
-
-# รองรับไฟล์ทั้ง .paq, .csv และ .txt
+# อัปโหลดเฉพาะไฟล์ CSV เท่านั้น
 uploaded_file = st.sidebar.file_uploader(
-    "อัปโหลดไฟล์ Datapaq (.paq / .csv / .txt)",
-    type=["paq", "csv", "txt"],
+    "อัปโหลดไฟล์ CSV (.csv)",
+    type=["csv"],
     accept_multiple_files=False,
 )
 
@@ -540,7 +522,7 @@ if uploaded_file:
     if df.empty:
         st.error(
             "⚠️ ไม่สามารถอ่านข้อมูลจากไฟล์ที่อัปโหลดได้"
-            " กรุณาตรวจสอบว่าเป็นไฟล์ข้อมูลจาก Datapaq (.paq / .csv) หรือไม่"
+            " กรุณาตรวจสอบว่าเป็นไฟล์ CSV จาก Datapaq หรือไม่"
         )
     else:
         st.sidebar.success(f"โหลดไฟล์ {uploaded_file.name} สำเร็จ ({len(df)} แถว)")
@@ -781,6 +763,14 @@ if uploaded_file:
             "#FF8633",
             "#8633FF",
             "#33FFDA",
+            "#F0B90B",
+            "#E63946",
+            "#48CAE4",
+            "#90E0EF",
+            "#C1121F",
+            "#00B4D8",
+            "#0096C7",
+            "#70e000",
         ]
 
         probe_cols = [c for c in df_chart.columns if c.startswith("Probe #")]
@@ -1288,4 +1278,4 @@ if uploaded_file:
                 )
 
 else:
-    st.info("👈 กรุณาเลือกอัปโหลดไฟล์ Datapaq (.paq / .csv) ที่เมนูด้านซ้าย")
+    st.info("👈 กรุณาเลือกอัปโหลดไฟล์ CSV (.csv) ที่เมนูด้านซ้าย")
