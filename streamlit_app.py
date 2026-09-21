@@ -1,6 +1,8 @@
 import io
+import re
 import numpy as np
 import openpyxl
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -205,6 +207,62 @@ def format_seconds_to_time(total_seconds):
     return f"{hours}:{minutes:02d}:{seconds:02d}"
 
 
+# ฟังก์ชันแปลงรูปแบบเวลาเป็นวินาที
+def parse_time_to_sec(val):
+    if pd.isna(val) or not val or val == "-":
+        return None
+    val_str = str(val).strip()
+    try:
+        parts = val_str.split(":")
+        if len(parts) == 3:
+            return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+        elif len(parts) == 2:
+            return int(parts[0]) * 60 + int(parts[1])
+    except Exception:
+        return None
+    return None
+
+
+# ฟังก์ชันตรวจสอบว่าค่าพารามิเตอร์แต่ละช่องผ่านเกณฑ์มาตรฐาน PRCNVR02044 C หรือไม่
+def is_param_pass(val, param_type, is_16xhp=False, p_num=1):
+    if pd.isna(val) or val == "-" or str(val).strip() in ["", "nan", "NaN"]:
+        return True
+
+    try:
+        if param_type in ["br_max", "db_max", "dr_max"]:
+            fval = float(str(val).replace(",", "").strip())
+            if param_type == "br_max":
+                if is_16xhp:
+                    if p_num in [1, 3, 4, 6]:  # Corner probes
+                        return 596.0 <= fval <= 610.0
+                    else:  # Center probes
+                        return 583.0 <= fval <= 607.0
+                else:
+                    return 583.0 <= fval <= 607.0
+            elif param_type == "db_max":
+                return 200.0 <= fval <= 375.0
+            elif param_type == "dr_max":
+                return 175.0 <= fval <= 260.0
+
+        else:
+            sec = parse_time_to_sec(val)
+            if sec is None:
+                return True
+            if param_type == "br_600":
+                return sec < 240  # < 4:00 min
+            elif param_type in ["br_583", "br_577"]:
+                max_sec = 360 if is_16xhp else 420  # 6:00 min (16XHP), 7:00 min (12/27XHP)
+                return 150 <= sec <= max_sec  # 2:30 - 7:00 min
+            elif param_type == "db_200":
+                return sec > 120  # > 2:00 min
+            elif param_type == "dr_175":
+                return sec > 60  # > 1:00 min
+    except Exception:
+        return True
+
+    return True
+
+
 # ฟังก์ชันแปลง Hex Color เป็น RGBA
 def hex_to_rgba(hex_str, opacity=0.25):
     hex_str = hex_str.lstrip("#")
@@ -227,7 +285,42 @@ def safe_float(val):
         return np.nan
 
 
-# 5. ฟังก์ชันอ่านไฟล์ CSV และดึงข้อมูล
+# ฟังก์ชันกำจัดอักขระต้องห้ามใน openpyxl ป้องกันปัญหา IllegalCharacterError
+def clean_dataframe_for_excel(df_to_clean):
+    if df_to_clean is None or df_to_clean.empty:
+        return df_to_clean
+
+    df_clean = df_to_clean.copy()
+
+    if isinstance(df_clean.columns, pd.MultiIndex):
+        new_tuples = []
+        for col_tuple in df_clean.columns:
+            clean_tuple = tuple(
+                ILLEGAL_CHARACTERS_RE.sub("", str(c)) if isinstance(c, str) else c
+                for c in col_tuple
+            )
+            new_tuples.append(clean_tuple)
+        df_clean.columns = pd.MultiIndex.from_tuples(
+            new_tuples, names=df_clean.columns.names
+        )
+    else:
+        df_clean.columns = [
+            ILLEGAL_CHARACTERS_RE.sub("", str(c)) if isinstance(c, str) else c
+            for c in df_clean.columns
+        ]
+
+    for col in df_clean.columns:
+        if df_clean[col].dtype == "object":
+            df_clean[col] = df_clean[col].apply(
+                lambda x: (
+                    ILLEGAL_CHARACTERS_RE.sub("", str(x)) if isinstance(x, str) else x
+                )
+            )
+
+    return df_clean
+
+
+# 5. ฟังก์ชันอ่านไฟล์ PAQ / CSV และดึงข้อมูล
 def parse_single_file(uploaded_file):
     uploaded_file.seek(0)
     raw_bytes = uploaded_file.read()
@@ -377,9 +470,10 @@ def to_excel_bytes(dataframe, summary_dataframe=None, fig_plotly=None):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         if summary_dataframe is not None and not summary_dataframe.empty:
-            summary_dataframe.to_excel(writer, sheet_name="Parameter Summary")
+            summary_clean = clean_dataframe_for_excel(summary_dataframe)
+            summary_clean.to_excel(writer, sheet_name="Parameter Summary")
 
-        df_export = dataframe.copy()
+        df_export = clean_dataframe_for_excel(dataframe)
         df_export.to_excel(writer, index=False, sheet_name="Raw Log Data")
 
     if fig_plotly is not None:
@@ -414,8 +508,11 @@ if st.sidebar.button("🧹 เคลียร์ข้อมูลไฟล์�
     st.cache_data.clear()
     st.rerun()
 
+# รองรับไฟล์ทั้ง .paq, .csv และ .txt
 uploaded_file = st.sidebar.file_uploader(
-    "อัปโหลดไฟล์ CSV (.csv)", type=["csv"], accept_multiple_files=False
+    "อัปโหลดไฟล์ Datapaq (.paq / .csv / .txt)",
+    type=["paq", "csv", "txt"],
+    accept_multiple_files=False,
 )
 
 # 7. แสดงผล Header Metadata + กราฟพร้อมโซนเวลา
@@ -425,7 +522,7 @@ if uploaded_file:
     if df.empty:
         st.error(
             "⚠️ ไม่สามารถอ่านข้อมูลจากไฟล์ที่อัปโหลดได้"
-            " กรุณาตรวจสอบว่าเป็นไฟล์ CSV จาก Datapaq หรือไม่"
+            " กรุณาตรวจสอบว่าเป็นไฟล์ข้อมูลจาก Datapaq (.paq / .csv) หรือไม่"
         )
     else:
         st.sidebar.success(f"โหลดไฟล์ {uploaded_file.name} สำเร็จ ({len(df)} แถว)")
@@ -837,13 +934,14 @@ if uploaded_file:
             "### 📊 ตารางสรุปผลการวิเคราะห์ (Data Table for Google Sheets Copy)"
         )
 
-        # ระบบตรวจหารุ่นสินค้าอัตโนมัติจากไฟล์ CSV
+        # ระบบตรวจหารุ่นสินค้าอัตโนมัติจากไฟล์
         search_text = (
             f"{uploaded_file.name} {metadata.get('title', '')}"
             f" {metadata.get('note_1', '')}"
             f" {metadata.get('raw_text', '')}".upper()
         )
         is_27xhp = ("27XHP" in search_text) or ("27 XHP" in search_text)
+        is_16xhp = ("16XHP" in search_text) or ("16 XHP" in search_text)
 
         # อ้างอิงช่วงเวลาของแต่ละกระบวนการอย่างสมบูรณ์ตรงตามไฟล์ข้อมูล Datapaq
         # Dryer Zone: 00:00:00 - 00:04:58 (0 - 298 วินาที)
@@ -857,7 +955,6 @@ if uploaded_file:
         ]
 
         # Brazing Zone Max Temp: 00:15:00 - 00:29:10 (900 - 1750 วินาที)
-        # ขยายช่วงเวลาให้ครอบคลุมจุดสูงสุด Peak Temp ที่แท้จริงของทุกโพรบ
         brazing_max_subset = df[
             (df["ElapsedSeconds"] >= 900) & (df["ElapsedSeconds"] <= 1750)
         ]
@@ -978,8 +1075,83 @@ if uploaded_file:
 
         display_summary_df = pd.DataFrame(summary_rows, columns=multi_cols)
 
+        # แมปคอลัมน์กับพารามิเตอร์เพื่อตรวจสอบเกณฑ์มาตรฐาน
+        col_type_mapping = {
+            ("Brazing zone", "Max temp / probe (°C)"): "br_max",
+            ("Debinder", "Max temp / probe (°C)"): "db_max",
+            ("Dryer", "Max temp / probe (°C)"): "dr_max",
+            ("Brazing zone", "at 600°C / probe"): "br_600",
+            ("Brazing zone", "at 583°C / probe"): "br_583",
+            ("Brazing zone", "at 577°C / probe"): "br_577",
+            ("Debinder", "at 200°C / probe"): "db_200",
+            ("Dryer", "at 175°C / probe"): "dr_175",
+        }
+
+        # คำนวณนับจำนวนค่าที่ไม่ผ่านเกณฑ์มาตรฐาน
+        ng_count = 0
+        for r_idx, row in display_summary_df.iterrows():
+            probe_str = row[("", "Probe")]
+            p_num = 1
+            try:
+                p_num = int(str(probe_str).replace("PB#", "").strip())
+            except Exception:
+                pass
+
+            for col_tuple, param_type in col_type_mapping.items():
+                if col_tuple in display_summary_df.columns:
+                    val = row[col_tuple]
+                    if not is_param_pass(val, param_type, is_16xhp=is_16xhp, p_num=p_num):
+                        ng_count += 1
+
+        # แสดงกล่องแจ้งเตือนสรุปสถานะการผ่านเกณฑ์มาตรฐาน
+        if ng_count == 0:
+            st.markdown(
+                """
+                <div style="background-color: #1c2b21; border: 1px solid #2ea043; border-radius: 6px; padding: 10px 16px; color: #7ee787; font-weight: bold; margin-bottom: 12px; font-size: 14px;">
+                    ✅ ผลการตรวจสอบ: ทุกค่าอยู่ในเกณฑ์มาตรฐานอ้างอิง PRCNVR02044 C (Pass 100%)
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                f"""
+                <div style="background-color: #3d1a24; border: 1px solid #da3633; border-radius: 6px; padding: 10px 16px; color: #ff8585; font-weight: bold; margin-bottom: 12px; font-size: 14px;">
+                    ⚠️ ผลการตรวจสอบ: พบ {ng_count} ค่าที่ไม่ผ่านเกณฑ์มาตรฐาน (แสดงไฮไลท์แถบสีแดงในตาราง)
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        # ฟังก์ชันแต่งสีตาราง (Pandas Styler) ไฮไลท์ช่องที่ไม่ผ่านเกณฑ์แบบสะอาดตา
+        def style_summary_dataframe(df_sum, is_16xhp_flag=False):
+            style_df = pd.DataFrame("", index=df_sum.index, columns=df_sum.columns)
+
+            for r_i, row_val in df_sum.iterrows():
+                p_str = row_val[("", "Probe")]
+                p_n = 1
+                try:
+                    p_n = int(str(p_str).replace("PB#", "").strip())
+                except Exception:
+                    pass
+
+                for col_t, p_type in col_type_mapping.items():
+                    if col_t in df_sum.columns:
+                        v = row_val[col_t]
+                        if not is_param_pass(v, p_type, is_16xhp=is_16xhp_flag, p_num=p_n):
+                            # สีไฮไลท์แดงซอฟต์พร้อมข้อความสีแดงสว่างและตัวหนา
+                            style_df.loc[r_i, col_t] = (
+                                "background-color: #3d1a24 !important; color: #ff8585 !important; font-weight: bold !important;"
+                            )
+                        else:
+                            style_df.loc[r_i, col_t] = "color: #ffffff !important;"
+
+            return df_sum.style.apply(lambda _: style_df, axis=None)
+
+        styled_summary_df = style_summary_dataframe(display_summary_df, is_16xhp_flag=is_16xhp)
+
         st.dataframe(
-            display_summary_df, use_container_width=True, hide_index=True
+            styled_summary_df, use_container_width=True, hide_index=True
         )
 
         # 📌 แสดงเกณฑ์มาตรฐานอ้างอิง PRCNVR02044 C
@@ -1039,4 +1211,4 @@ if uploaded_file:
                 )
 
 else:
-    st.info("👈 กรุณาเลือกอัปโหลดไฟล์ (.csv) ที่เมนูด้านซ้าย")
+    st.info("👈 กรุณาเลือกอัปโหลดไฟล์ Datapaq (.paq / .csv) ที่เมนูด้านซ้าย")
