@@ -157,6 +157,8 @@ st.markdown(
         [data-testid="stTable"] th, [data-testid="stTable"] td {
             text-align: center !important;
             vertical-align: middle !important;
+            background-color: #161b22 !important;
+            color: #ffffff !important;
         }
 
         /* ปรับแต่งปุ่มดาวน์โหลด Excel */
@@ -1125,7 +1127,12 @@ if uploaded_file:
 
         # ฟังก์ชันแต่งสีตาราง (Pandas Styler) ไฮไลท์ช่องที่ไม่ผ่านเกณฑ์แบบสะอาดตา
         def style_summary_dataframe(df_sum, is_16xhp_flag=False):
-            style_df = pd.DataFrame("", index=df_sum.index, columns=df_sum.columns)
+            # กำหนดสไตล์เริ่มต้นให้ทุกเซลล์ (รวม Probe & Location) มีพื้นหลังเข้ม #161b22 และตัวอักษรสีขาว #ffffff
+            style_df = pd.DataFrame(
+                "background-color: #161b22; color: #ffffff; text-align: center;",
+                index=df_sum.index,
+                columns=df_sum.columns,
+            )
 
             for r_i, row_val in df_sum.iterrows():
                 p_str = row_val[("", "Probe")]
@@ -1139,14 +1146,40 @@ if uploaded_file:
                     if col_t in df_sum.columns:
                         v = row_val[col_t]
                         if not is_param_pass(v, p_type, is_16xhp=is_16xhp_flag, p_num=p_n):
-                            # สีไฮไลท์แดงซอฟต์พร้อมข้อความสีแดงสว่างและตัวหนา
+                            # สีไฮไลท์แดงซอฟต์เข้มสำหรับช่องที่ไม่ผ่านเกณฑ์
                             style_df.loc[r_i, col_t] = (
-                                "background-color: #3d1a24 !important; color: #ff8585 !important; font-weight: bold !important;"
+                                "background-color: #4a1525; color: #ff8585; font-weight: bold; text-align: center;"
                             )
                         else:
-                            style_df.loc[r_i, col_t] = "color: #ffffff !important;"
+                            # สีพื้นหลังเข้มและตัวอักษรสีขาวสำหรับช่องที่ผ่านเกณฑ์
+                            style_df.loc[r_i, col_t] = (
+                                "background-color: #161b22; color: #ffffff; text-align: center;"
+                            )
 
-            return df_sum.style.apply(lambda _: style_df, axis=None)
+            styler = df_sum.style.apply(lambda _: style_df, axis=None)
+
+            # กำหนดสไตล์ของ Header และ Border ใน Styler
+            styler = styler.set_table_styles([
+                {
+                    "selector": "th",
+                    "props": [
+                        ("background-color", "#21262d"),
+                        ("color", "#ffffff"),
+                        ("font-weight", "bold"),
+                        ("text-align", "center"),
+                        ("border", "1px solid #30363d"),
+                    ],
+                },
+                {
+                    "selector": "td",
+                    "props": [
+                        ("border", "1px solid #30363d"),
+                        ("text-align", "center"),
+                    ],
+                },
+            ])
+
+            return styler
 
         styled_summary_df = style_summary_dataframe(display_summary_df, is_16xhp_flag=is_16xhp)
 
