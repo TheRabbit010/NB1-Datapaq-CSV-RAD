@@ -322,7 +322,7 @@ def clean_dataframe_for_excel(df_to_clean):
     return df_clean
 
 
-# 5. ฟังก์ชันอ่านไฟล์ PAQ / CSV และดึงข้อมูล
+# 5. ฟังก์ชันอ่านไฟล์ PAQ / CSV และดึงข้อมูลแบบยืดหยุ่นรองรับจำนวนโพรบไดนามิก
 def parse_single_file(uploaded_file):
     uploaded_file.seek(0)
     raw_bytes = uploaded_file.read()
@@ -356,6 +356,7 @@ def parse_single_file(uploaded_file):
         "raw_text": text_content,
     }
 
+    num_channels = 0
     for line in lines:
         line_str = line.strip()
         if not line_str:
@@ -385,6 +386,11 @@ def parse_single_file(uploaded_file):
                     )
                 elif "note" in key.lower():
                     metadata["note_1"] = val
+                elif "number of channels" in key.lower() or "number of enabled probes" in key.lower():
+                    try:
+                        num_channels = max(num_channels, int(val))
+                    except ValueError:
+                        pass
                 elif key.lower().startswith("probe number #"):
                     try:
                         p_num = int(key.lower().replace("probe number #", "").strip())
@@ -428,6 +434,16 @@ def parse_single_file(uploaded_file):
     if not data_rows:
         return pd.DataFrame(), metadata
 
+    # คำนวณจำนวนโพรบสูงสุดจากข้อมูลไดนามิก
+    max_raw_len = max(len(r["raw_vals"]) for r in data_rows) if data_rows else 0
+    all_probe_nums = (
+        [max_raw_len, num_channels] +
+        list(probe_channel_map.keys()) +
+        list(probe_channel_map.values()) +
+        list(probe_labels.keys())
+    )
+    max_p_num = max(all_probe_nums) if all_probe_nums else 8
+
     parsed_data = []
     for row in data_rows:
         row_dict = {
@@ -436,18 +452,18 @@ def parse_single_file(uploaded_file):
             "Distance (m)": round(row["dist_val"], 2),
         }
 
-        ch_values = {ch: np.nan for ch in range(1, 9)}
+        ch_values = {ch: np.nan for ch in range(1, max_p_num + 1)}
         raw_vals = row["raw_vals"]
 
-        for idx, val_str in enumerate(raw_vals[:8]):
+        for idx, val_str in enumerate(raw_vals):
             col_idx = idx + 1
             ch_num = probe_channel_map.get(col_idx, col_idx)
             val_num = safe_float(val_str)
 
-            if 1 <= ch_num <= 8:
+            if 1 <= ch_num <= max_p_num:
                 ch_values[ch_num] = val_num
 
-        for i in range(1, 9):
+        for i in range(1, max_p_num + 1):
             col_label = f"Probe #{i}"
             if i in probe_labels:
                 lbl = probe_labels[i]
@@ -757,10 +773,18 @@ if uploaded_file:
             "#DAA520",
             "#800080",
             "#00FFFF",
+            "#33FF57",
+            "#3357FF",
+            "#FF33A8",
+            "#A833FF",
+            "#33FFA8",
+            "#FF8633",
+            "#8633FF",
+            "#33FFDA",
         ]
 
         probe_cols = [c for c in df_chart.columns if c.startswith("Probe #")]
-        for idx, col in enumerate(probe_cols[:8]):
+        for idx, col in enumerate(probe_cols):
             if df_chart[col].notna().any():
                 fig.add_trace(
                     go.Scatter(
@@ -962,21 +986,45 @@ if uploaded_file:
         ]
         brazing_ht_subset = df[(df["ElapsedSeconds"] >= 0)]
 
-        # จัดลำดับโพรบ PB#1, PB#2, PB#3, PB#8, PB#4, PB#5, PB#6, PB#7
-        probe_order = [1, 2, 3, 8, 4, 5, 6, 7]
-        ordered_cols = []
-        for p_num in probe_order:
-            for c in probe_cols[:8]:
-                if f"Probe #{p_num}" in c or f"Probe #{p_num}:" in c:
-                    ordered_cols.append((p_num, c))
-                    break
+        # จัดหาคอลัมน์โพรบทั้งหมดในไฟล์อย่างยืดหยุ่น
+        all_df_probe_cols = [c for c in df.columns if c.startswith("Probe #")]
+        probe_map = {}
+        for c in all_df_probe_cols:
+            try:
+                p_num = int(c.split(":")[0].replace("Probe #", "").strip())
+                probe_map[p_num] = c
+            except Exception:
+                pass
+
+        found_p_nums = sorted(probe_map.keys())
+
+        # หากมีโพรบ 1..8 ครบถ้วน จัดลำดับตามมาตรฐาน [1, 2, 3, 8, 4, 5, 6, 7] หากมากกว่านั้นเรียงตามลำดับหมายเลข
+        if found_p_nums == [1, 2, 3, 4, 5, 6, 7, 8]:
+            ordered_p_nums = [1, 2, 3, 8, 4, 5, 6, 7]
+        else:
+            ordered_p_nums = found_p_nums
+
+        ordered_cols = [(p_num, probe_map[p_num]) for p_num in ordered_p_nums if p_num in probe_map]
 
         summary_rows = []
         for p_num, col_name in ordered_cols:
-            if is_27xhp:
-                location = "Right" if p_num in [1, 2, 3, 8] else "Left"
+            # ดึงข้อความชื่อตำแหน่งจากแท็กของโพรบ
+            label_part = col_name.split(":", 1)[1].strip() if ":" in col_name else ""
+            lbl_upper = label_part.upper()
+
+            if "RIGHT" in lbl_upper:
+                location = "Right"
+            elif "LEFT" in lbl_upper:
+                location = "Left"
+            elif "BOTTOM" in lbl_upper:
+                location = "Bottom"
+            elif "TOP" in lbl_upper:
+                location = "Top"
             else:
-                location = "Bottom" if p_num in [1, 2, 3, 8] else "Top"
+                if is_27xhp:
+                    location = "Right" if p_num in [1, 2, 3, 8] else "Left"
+                else:
+                    location = "Bottom" if p_num in [1, 2, 3, 8] else "Top"
 
             short_pb_name = f"PB#{p_num}"
             probe_series = df[col_name]
@@ -1125,9 +1173,8 @@ if uploaded_file:
                 unsafe_allow_html=True,
             )
 
-        # ฟังก์ชันแต่งสีตาราง (Pandas Styler) ไฮไลท์ช่องที่ไม่ผ่านเกณฑ์แบบสะอาดตา
+        # ฟังก์ชันแต่งสีตาราง (Pandas Styler) ไฮไลท์ช่องที่ไม่ผ่านเกณฑ์แบบสะอาดตาและชัดเจน
         def style_summary_dataframe(df_sum, is_16xhp_flag=False):
-            # กำหนดสไตล์เริ่มต้นให้ทุกเซลล์ (รวม Probe & Location) มีพื้นหลังเข้ม #161b22 และตัวอักษรสีขาว #ffffff
             style_df = pd.DataFrame(
                 "background-color: #161b22; color: #ffffff; text-align: center;",
                 index=df_sum.index,
@@ -1146,19 +1193,16 @@ if uploaded_file:
                     if col_t in df_sum.columns:
                         v = row_val[col_t]
                         if not is_param_pass(v, p_type, is_16xhp=is_16xhp_flag, p_num=p_n):
-                            # สีไฮไลท์แดงซอฟต์เข้มสำหรับช่องที่ไม่ผ่านเกณฑ์
                             style_df.loc[r_i, col_t] = (
                                 "background-color: #4a1525; color: #ff8585; font-weight: bold; text-align: center;"
                             )
                         else:
-                            # สีพื้นหลังเข้มและตัวอักษรสีขาวสำหรับช่องที่ผ่านเกณฑ์
                             style_df.loc[r_i, col_t] = (
                                 "background-color: #161b22; color: #ffffff; text-align: center;"
                             )
 
             styler = df_sum.style.apply(lambda _: style_df, axis=None)
 
-            # กำหนดสไตล์ของ Header และ Border ใน Styler
             styler = styler.set_table_styles([
                 {
                     "selector": "th",
@@ -1221,7 +1265,7 @@ if uploaded_file:
             with col_opt1:
                 custom_filename = st.text_input(
                     "ตั้งชื่อไฟล์ดาวน์โหลด:",
-                    value="datapaq_nb1_rad_8probes_data.xlsx",
+                    value="datapaq_nb1_rad_data.xlsx",
                 )
                 if not custom_filename.endswith(".xlsx"):
                     custom_filename += ".xlsx"
